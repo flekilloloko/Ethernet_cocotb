@@ -1,51 +1,17 @@
-# Simple tests for an adder module
+# 
 import cocotb
-from cocotb.triggers import Timer
+from cocotb.log import SimLog
+from cocotb.utils import get_sim_steps, get_time_from_sim_steps
+from cocotb.triggers import Timer, RisingEdge, ReadOnly
 from cocotb.result import TestFailure
-from fifo_model import adder_model, FIFO
+from fifo_model import FIFO, fromint, frombin
 from cocotb.clock import Clock
 import random
-
-# clk = [0, 0]
+import simulator
 
 """def getbin(num, tam):
     return format(num, 'b').zfill(tam) """
 
-def fromint(val):
-    binario = []
-    for i in range(7):
-        if val & 1:
-            binario.append(1)
-        else:   
-            binario.append(0)
-        val /= 2 #val = val >> 1
-    return binario
-
-def frombin(bin_val):
-    resultado = 0
-    for i in range(7):
-        if bin_val[i] == 1:
-            resultado += 2**i
-    return resultado
-
-def write(fifo, valor):
-    #while fifo.wrreq:
-    #    pass
-    #    continue
-    if fifo.clk:            #Si el clock esta alto, espero que baje
-        while fifo.clk:
-            pass
-    while fifo.clk:         #Espero el flanco subida
-        pass
-    fifo.stack.put(valor)
-    
-def read(fifo):
-    if fifo.clk:            #Si el clock esta alto, espero que baje
-        while fifo.clk:
-            pass
-    while fifo.clk:         #Espero el flanco subida
-        pass
-    return fifo.stack.get()
 
 @cocotb.coroutine
 def clk_gen(periodo, clk):
@@ -57,10 +23,10 @@ def clk_gen(periodo, clk):
         
 class EthernetTB(object):
     def __init__(self, dut):
-        self.dut = dut
-        self.clk = 0 # cocotb.binary.BinaryValue()
+        #self.dut = dut
+        self.clk = dut.clk# cocotb.binary.BinaryValue()
         self.miStack = FIFO()
-        self.miStack.clk = self.clk
+        #self.miStack.clk = self.clk
         
     
 @cocotb.coroutine
@@ -69,31 +35,38 @@ def write_cycle(tiempo, write):
     yield Timer(tiempo)
     write = 0
 
-@cocotb.test(timeout=None)
+@cocotb.test(timeout=None, skip=False)
 def fifo_basic_test(dut):
     tb = EthernetTB(dut)
-    salida_esperada = []
     salida = []
-    clk = tb.clk
-    cocotb.fork(clk_gen(5000, clk))#cocotb.fork(Clock(clk, 5000).start())
-    yield Timer(2)
-    for i in range(5):
-        write(tb.miStack, i)
+    salida_esperada = []
+    
+    for i in range(10):
+        tb.miStack.write(fromint(i))    
+    for i in range(10):
+        salida.append(frombin(tb.miStack.read()))
         salida_esperada.append(i)
-    for i in range(5):
-        salida.append(read(tb.miStack))
-    if salida == salida_esperada:
+    
+    yield Timer(20)
+    if (salida == salida_esperada) & tb.miStack.empty:
         dut._log.info("[+] Test escritura y lectura: Correcto")
     else:   
-        raise TestFaliure("[-] Test escritura y lectura: Fallido")
-    
-@cocotb.test()
-def conversiones_test(dut):
-    input_buf = fromint(38)
-    numero = frombin(input_buf)
-    dut._log.info("38 EN BINARIO: %s !" % int(numero))
-    if numero == 38:
-        dut._log.info("[+] Test conversion binario a/desde entero: Correcto")
-    else:   
-        raise TestFaliure("[-] Test conversion binario a/desde entero: Fallido")
-    yield Timer(2000)
+        raise TestFailure("[-] Test escritura y lectura: Fallido. %s" % len(tb.miStack.stack))
+
+@cocotb.test(skip=True)
+def clk_test(dut):
+    tb = EthernetTB(dut)
+    clk = [0]
+    tb.clk = clk[0]
+    cocotb.fork(clk_gen(5000, clk[0]))
+    success=True
+    if clk==1: success=False
+    yield Timer(2800)
+    if clk==0: success=False
+    yield Timer(2800)
+    if clk==1: success=False
+    yield Timer(2800)
+    if success:
+        dut._log.info("[+] Test clock: Correcto")
+    else:
+        raise TestFailure("[-] Test clock: Fallido")
