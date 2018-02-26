@@ -9,25 +9,22 @@ from cocotb.clock import Clock
 import random
 import simulator
 
-"""def getbin(num, tam):
-    return format(num, 'b').zfill(tam) """
-
-
 @cocotb.coroutine
-def clk_gen(periodo, clk):
-    while True:
-        clk = 0
-        yield Timer(periodo/2)
-        clk = 1
-        yield Timer(periodo/2)
+def fifo_write(fifo, numero, clk):
+    fifo.data = fromint(numero)
+    yield RisingEdge(clk)
+    fifo.write()
+    
+@cocotb.coroutine
+def fifo_read(fifo, clk):
+    yield RisingEdge(clk)
+    fifo.read()
         
 class EthernetTB(object):
     def __init__(self, dut):
         #self.dut = dut
         self.clk = dut.clk# cocotb.binary.BinaryValue()
-        self.miStack = FIFO()
-        #self.miStack.clk = self.clk
-        
+        self.miStack = FIFO(tamStack=10, dataDepth=8)        
     
 @cocotb.coroutine
 def write_cycle(tiempo, write):
@@ -38,14 +35,18 @@ def write_cycle(tiempo, write):
 @cocotb.test(timeout=None, skip=False)
 def fifo_basic_test(dut):
     tb = EthernetTB(dut)
+    cocotb.fork(Clock(dut.clk, 20).start())
     salida = []
     salida_esperada = []
     
     for i in range(10):
-        tb.miStack.write(fromint(i))    
+        numero = random.randrange(0,255)
+        fifo_write(tb.miStack, numero, dut.clk)    
+        salida_esperada.append(numero)
     for i in range(10):
-        salida.append(frombin(tb.miStack.read()))
-        salida_esperada.append(i)
+        tb.miStack.read()
+        salida.append(frombin(tb.miStack.q,9))
+
     
     yield Timer(20)
     if (salida == salida_esperada) & tb.miStack.empty:
