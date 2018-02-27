@@ -9,22 +9,12 @@ from cocotb.clock import Clock
 import random
 import simulator
 
-@cocotb.coroutine
-def fifo_write(fifo, numero, clk):
-    fifo.data = fromint(numero)
-    yield RisingEdge(clk)
-    fifo.write()
-    
-@cocotb.coroutine
-def fifo_read(fifo, clk):
-    yield RisingEdge(clk)
-    fifo.read()
-        
+           
 class EthernetTB(object):
     def __init__(self, dut):
         #self.dut = dut
         self.clk = dut.clk# cocotb.binary.BinaryValue()
-        self.miStack = FIFO(tamStack=10, dataDepth=8)        
+        self.miStack = FIFO()#tamStack=10, dataDepth=8)        
     
 @cocotb.coroutine
 def write_cycle(tiempo, write):
@@ -36,23 +26,29 @@ def write_cycle(tiempo, write):
 def fifo_basic_test(dut):
     tb = EthernetTB(dut)
     cocotb.fork(Clock(dut.clk, 20).start())
+    fifo1 = tb.miStack
+    clk = dut.clk
     salida = []
     salida_esperada = []
     
     for i in range(10):
         numero = random.randrange(0,255)
-        fifo_write(tb.miStack, numero, dut.clk)    
+        fifo1.data = fromint(numero)
+        yield RisingEdge(clk)
+        fifo1.write()
         salida_esperada.append(numero)
     for i in range(10):
-        tb.miStack.read()
-        salida.append(frombin(tb.miStack.q,9))
+        yield RisingEdge(clk)
+        fifo1.read()
+        salida.append(frombin(fifo1.q))
+
 
     
     yield Timer(20)
     if (salida == salida_esperada) & tb.miStack.empty:
         dut._log.info("[+] Test escritura y lectura: Correcto")
     else:   
-        raise TestFailure("[-] Test escritura y lectura: Fallido. %s" % len(tb.miStack.stack))
+        raise TestFailure("[-] Test escritura y lectura: Fallido. %s %s" % (len(tb.miStack.stack), test))
 
 @cocotb.test(skip=True)
 def clk_test(dut):
